@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="ZapretReborn.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:ZapretReborn"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Title="ZapretReborn">
+
+    <Window.SystemBackdrop>
+        <MicaBackdrop />
+    </Window.SystemBackdrop>
+
+    <NavigationView x:Name="nvZapret" Width="325"
+                    PaneDisplayMode="LeftCompact"
+                    IsBackButtonVisible="Collapsed"
+                    CompactPaneLength="40"
+                    SelectionChanged="nvZapret_SelectionChanged"
+                    IsSettingsVisible="False"
+                    Padding="0,40,0,0">
+        <NavigationView.MenuItems>
+            <NavigationViewItem Content="Главная" Icon="Home" Tag="Home" x:Name="Home"/>
+            <NavigationViewItem Content="Сервис" Icon="Admin" Tag="Service" x:Name="Service"/>
+
+            <NavigationViewItem Tag="Settings" 
+                    Content="Настройки" 
+                    Icon="Setting" 
+                    ToolTipService.ToolTip="Настройки"
+                                x:Name="Settings">
+                <NavigationViewItem.InfoBadge>
+                    <InfoBadge x:Name="UpdateBadge" 
+                                Width="8" 
+                                Height="8"
+                                Background="{ThemeResource SystemFillColorCriticalBrush}" 
+                                BorderBrush="#FF4444"
+                                Visibility="Collapsed"/>
+                </NavigationViewItem.InfoBadge>
+            </NavigationViewItem>
+
+        </NavigationView.MenuItems>
+
+        <Frame x:Name="contentFrame"/>
+    </NavigationView>
+
+</Window>

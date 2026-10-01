@@ -1,0 +1,111 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="ZapretReborn.SettingsPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <Grid Padding="7,25,0,0">
+        <!-- Слой 1: Вся твоя разметка с настройками -->
+        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Spacing="10" HorizontalAlignment="Left" VerticalAlignment="Top" Width="400">
+
+                <!-- Заголовок -->
+                <StackPanel Spacing="1" Margin="4,0,0,4">
+                    <TextBlock Text="Настройки" FontSize="20" FontWeight="Bold" Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
+                </StackPanel>
+
+                <!-- 1. Карточка Темы -->
+                <Border Background="{ThemeResource LayerFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" Padding="10" Width="270" HorizontalAlignment="Left">
+                    <StackPanel Spacing="8">
+                        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,0,0,4">
+                            <FontIcon Glyph="&#xE896;" FontSize="16"/>
+                            <TextBlock Text="Тема приложения" FontWeight="SemiBold" FontSize="14"/>
+                        </StackPanel>
+                        <ComboBox x:Name="ThemeComboBox" HorizontalAlignment="Stretch" SelectionChanged="ThemeComboBox_SelectionChanged">
+                            <ComboBoxItem Content="Использовать системную"/>
+                            <ComboBoxItem Content="Светлая"/>
+                            <ComboBoxItem Content="Темная"/>
+                        </ComboBox>
+                    </StackPanel>
+                </Border>
+
+                <!-- 2. Карточка Автозагрузки -->
+                <Border Background="{ThemeResource LayerFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" Padding="10" Width="270" HorizontalAlignment="Left">
+                    <StackPanel Spacing="6">
+                        <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,0,0,4">
+                            <FontIcon Glyph="&#xE896;" FontSize="16"/>
+                            <TextBlock Text="Системные параметры" FontWeight="SemiBold" FontSize="14"/>
+                        </StackPanel>
+                        <CheckBox x:Name="AutostartCheckBox" 
+                                  Content="Запускать приложение при старте Windows" 
+                                  FontSize="13"
+                                  Checked="AutostartCheckBox_CheckedChanged" 
+                                  Unchecked="AutostartCheckBox_CheckedChanged"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- 3. Карточка Обновлений с интегрированной плашкой версий -->
+                <Border Background="{ThemeResource LayerFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" Padding="10" Width="270" HorizontalAlignment="Left">
+                    <StackPanel Spacing="10">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE895;" FontSize="16"/>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,0">
+                                <!-- Твой существующий текст заголовка -->
+                                <TextBlock Text="Обновления" FontSize="14" FontWeight="SemiBold"/>
+
+                                <!-- Красная точка на самой странице, по умолчанию скрыта -->
+                                <Ellipse x:Name="SettingsUpdateBadge" 
+                                         Width="8" 
+                                         Height="8" 
+                                         Fill="#FF4444" 
+                                         Margin="8,0,0,0" 
+                                         VerticalAlignment="Center"
+                                         Visibility="Collapsed"/>
+                            </StackPanel>
+                        </StackPanel>
+                        <TextBlock Text="Проверка актуальных версий скриптов обхода и графического интерфейса." FontSize="12" TextWrapping="Wrap" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+
+                        <!-- ПЛАШКА С ТЕКУЩИМИ ВЕРСИЯМИ - привязана к карточке обновлений -->
+                        <Border Background="{ThemeResource LayerFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="4" Padding="8" Margin="0,5,0,0">
+                            <StackPanel Spacing="2">
+                                <TextBlock FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" FontWeight="SemiBold">Текущие версии:</TextBlock>
+                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                    <TextBlock FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="• Интерфейс (UI):"/>
+                                    <TextBlock x:Name="UiVersionRun" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorPrimaryBrush}" Text="Загрузка..."/>
+                                </StackPanel>
+                                <StackPanel Orientation="Horizontal" Spacing="4">
+                                    <TextBlock FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}" Text="• Скрипты (Zapret):"/>
+                                    <TextBlock x:Name="ZapretVersionRun" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource TextFillColorPrimaryBrush}" Text="Загрузка..."/>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <Button x:Name="CheckUpdatesButton" HorizontalAlignment="Stretch" Click="CheckUpdatesButton_Click" Width="Auto">
+                            <Grid HorizontalAlignment="Stretch">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <FontIcon Glyph="&#xE896;" FontSize="14"/>
+                                    <TextBlock Text="Проверить обновления"/>
+                                </StackPanel>
+                            </Grid>
+                        </Button>
+                        <!-- Элементы для индикации прогресса -->
+                        <ProgressBar x:Name="UpdateProgressBar" 
+             Value="0" 
+             Maximum="100" 
+             Visibility="Collapsed" 
+             Margin="0,5,0,0"/>
+
+                        <TextBlock x:Name="UpdateStatusText" 
+           FontSize="12" 
+           Foreground="{ThemeResource TextFillColorSecondaryBrush}" 
+           Visibility="Collapsed"/>
+                    </StackPanel>
+                </Border>
+
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</Page>

@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "ZapretReborn (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "ZapretReborn (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}
