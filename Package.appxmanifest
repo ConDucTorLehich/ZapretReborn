@@ -11,7 +11,7 @@
   <Identity
     Name="0831cab4-2733-4358-81df-400ee69c7221"
     Publisher="CN=fedko"
-    Version="1.0.0.0" />
+    Version="2.0.0.0" />
 
   <mp:PhoneIdentity PhoneProductId="0831cab4-2733-4358-81df-400ee69c7221" PhonePublisherId="00000000-0000-0000-0000-000000000000"/>
 

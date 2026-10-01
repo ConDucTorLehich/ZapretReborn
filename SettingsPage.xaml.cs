@@ -384,15 +384,19 @@ namespace ZapretReborn
                         {
                             DispatcherQueue.TryEnqueue(() =>
                             {
+                                UpdateProgressBar.IsIndeterminate = false;
                                 UpdateProgressBar.Value = percent;
                             });
                         });
 
+                        UpdateProgressBar.IsIndeterminate = true;
                         string tempFile = Path.Combine(Path.GetTempPath(), Path.GetFileName(uiUpdateResult.DownloadUrl));
                         bool downloaded = await UpdateService.DownloadUpdateAsync(uiUpdateResult.DownloadUrl, tempFile, downloadProgress);
 
                         if (downloaded)
                         {
+                            UpdateProgressBar.IsIndeterminate = false;
+                            UpdateProgressBar.Value = 100;
                             var installProgress = new Progress<string>(status =>
                             {
                                 DispatcherQueue.TryEnqueue(() =>

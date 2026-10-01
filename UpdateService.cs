@@ -194,23 +194,41 @@ public static class UpdateService
 
             long? totalBytes = response.Content.Headers.ContentLength;
             using var stream = await response.Content.ReadAsStreamAsync();
-            using var fileStream = new FileStream(destinationPath, FileMode.Create, FileAccess.Write, FileShare.None, 8192, true);
+            using var fileStream = new FileStream(destinationPath, FileMode.Create, FileAccess.Write, FileShare.None, 128 * 1024, true);
 
-            var buffer = new byte[8192];
+            var buffer = new byte[128 * 1024];
             long totalRead = 0;
             int read;
+            double lastReportedPercentage = 0;
+            var progressTimer = Stopwatch.StartNew();
 
-            while ((read = await stream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+            if (totalBytes is > 0)
+            {
+                progress?.Report(0);
+            }
+
+            while ((read = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length))) > 0)
             {
                 await fileStream.WriteAsync(buffer.AsMemory(0, read));
                 totalRead += read;
 
-                if (totalBytes.HasValue && progress != null)
+                if (totalBytes is > 0 && progress != null)
                 {
                     double percentage = (double)totalRead / totalBytes.Value * 100;
-                    progress.Report(percentage);
+                    if (percentage - lastReportedPercentage >= 1 || progressTimer.ElapsedMilliseconds >= 250)
+                    {
+                        progress.Report(Math.Min(percentage, 100));
+                        lastReportedPercentage = percentage;
+                        progressTimer.Restart();
+                    }
                 }
             }
+
+            if (totalBytes is > 0)
+            {
+                progress?.Report(100);
+            }
+
             return true;
         }
         catch (Exception ex)
@@ -252,7 +270,7 @@ public static class UpdateService
                 }
 
                 progress?.Report("Подготовка single-file обновления...");
-                File.Copy(updateFilePath, Path.Combine(payloadDirectory, "ZapretReborn.exe"));
+                await Task.Run(() => File.Copy(updateFilePath, Path.Combine(payloadDirectory, "ZapretReborn.exe")));
                 payloadRoot = payloadDirectory;
             }
             else if (updateFilePath.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
