@@ -1,7 +1,10 @@
 using System;
+using System.Diagnostics;
 using System.IO;
+using System.IO.Compression;
+using System.Linq;
 using System.Net.Http;
-using System.Reflection;
+using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 
@@ -80,15 +83,28 @@ public static class UpdateService
 
             if (hasUpdate && root.TryGetProperty("assets", out var assets) && assets.GetArrayLength() > 0)
             {
-                foreach (var asset in assets.EnumerateArray())
+                var releaseAssets = assets.EnumerateArray().ToArray();
+                foreach (var asset in releaseAssets)
                 {
                     string name = asset.GetProperty("name").GetString() ?? "";
-                    if (name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) ||
-                        (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) &&
-                         name.Contains("ZapretReborn", StringComparison.OrdinalIgnoreCase)))
+                    if (string.Equals(name, "ZapretReborn.exe", StringComparison.OrdinalIgnoreCase))
                     {
                         downloadUrl = asset.GetProperty("browser_download_url").GetString();
                         break;
+                    }
+                }
+
+                if (downloadUrl == null)
+                {
+                    foreach (var asset in releaseAssets)
+                    {
+                        string name = asset.GetProperty("name").GetString() ?? "";
+                        if (name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) &&
+                            name.Contains("ZapretReborn", StringComparison.OrdinalIgnoreCase))
+                        {
+                            downloadUrl = asset.GetProperty("browser_download_url").GetString();
+                            break;
+                        }
                     }
                 }
             }
@@ -209,83 +225,228 @@ public static class UpdateService
     /// </summary>
     public static async Task<bool> InstallUiUpdateAsync(string updateFilePath, IProgress<string>? progress = null)
     {
+        string? updateDirectory = null;
+        string? updaterScriptPath = null;
+        bool updaterStarted = false;
+
         try
         {
             progress?.Report("Подготовка к установке UI...");
 
             if (!File.Exists(updateFilePath))
             {
-                progress?.Report("Ошибка: файл обновления не найден");
+                progress?.Report("Ошибка: файл обновления не найден.");
                 return false;
             }
 
-            // Если это .zip архив - распаковываем
-            if (updateFilePath.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+            updateDirectory = Path.Combine(Path.GetTempPath(), $"ZapretReborn_Update_{Guid.NewGuid():N}");
+            string payloadDirectory = Path.Combine(updateDirectory, "payload");
+            Directory.CreateDirectory(payloadDirectory);
+
+            string payloadRoot;
+            if (updateFilePath.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
             {
-                progress?.Report("Распаковка архива...");
-
-                string tempDir = Path.Combine(Path.GetTempPath(), "ZapretReborn_Update");
-                if (Directory.Exists(tempDir))
-                    Directory.Delete(tempDir, true);
-                Directory.CreateDirectory(tempDir);
-
-                System.IO.Compression.ZipFile.ExtractToDirectory(updateFilePath, tempDir);
-
-                // Ищем exe файл в распакованном архиве
-                var exeFiles = Directory.GetFiles(tempDir, "*.exe", SearchOption.AllDirectories);
-                if (exeFiles.Length == 0)
+                if (!string.Equals(Path.GetFileName(updateFilePath), "ZapretReborn.exe", StringComparison.OrdinalIgnoreCase))
                 {
-                    progress?.Report("Ошибка: в архиве не найден exe файл");
-                    return false;
+                    throw new InvalidDataException("Ожидался single-file asset с именем ZapretReborn.exe.");
                 }
 
-                string newExePath = exeFiles[0];
-                string currentExePath = Assembly.GetExecutingAssembly().Location;
-
-                progress?.Report("Копирование файлов...");
-
-                // Копируем новый exe файл вместо старого
-                File.Copy(newExePath, currentExePath, true);
-
-                // Очищаем временные файлы
-                Directory.Delete(tempDir, true);
-                File.Delete(updateFilePath);
-
-                progress?.Report("UI обновление установлено!");
-                return true;
+                progress?.Report("Подготовка single-file обновления...");
+                File.Copy(updateFilePath, Path.Combine(payloadDirectory, "ZapretReborn.exe"));
+                payloadRoot = payloadDirectory;
             }
-            // Если это exe файл напрямую
-            else if (updateFilePath.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+            else if (updateFilePath.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
             {
-                progress?.Report("Замена executable файла...");
+                progress?.Report("Распаковка пакета приложения...");
+                await Task.Run(() => ZipFile.ExtractToDirectory(updateFilePath, payloadDirectory));
 
-                string currentExePath = Assembly.GetExecutingAssembly().Location;
-
-                if (!Path.GetFileName(updateFilePath).Equals("ZapretReborn.exe", StringComparison.OrdinalIgnoreCase))
+                string? updatedExecutable = Directory
+                    .GetFiles(payloadDirectory, "ZapretReborn.exe", SearchOption.AllDirectories)
+                    .FirstOrDefault();
+                if (updatedExecutable == null)
                 {
-                    progress?.Report("Ошибка: неверный файл обновления");
-                    return false;
+                    throw new InvalidDataException("В архиве не найден ZapretReborn.exe.");
                 }
 
-                File.Copy(updateFilePath, currentExePath, true);
-                File.Delete(updateFilePath);
-
-                progress?.Report("UI обновление установлено!");
-                return true;
+                payloadRoot = Path.GetDirectoryName(updatedExecutable)!;
             }
             else
             {
-                progress?.Report("Ошибка: неподдерживаемый формат файла");
-                return false;
+                throw new InvalidDataException("Неподдерживаемый формат обновления. Требуется ZapretReborn.exe или полный ZIP-пакет.");
             }
+
+            updaterScriptPath = Path.Combine(Path.GetTempPath(), $"ZapretReborn_Updater_{Guid.NewGuid():N}.ps1");
+            await File.WriteAllTextAsync(updaterScriptPath, UiUpdateInstallerScript, new UTF8Encoding(false));
+
+            string currentExecutable = Environment.ProcessPath
+                ?? throw new InvalidOperationException("Не удалось определить путь к запущенному приложению.");
+            var updaterStartInfo = new ProcessStartInfo
+            {
+                FileName = "powershell.exe",
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WindowStyle = ProcessWindowStyle.Hidden
+            };
+            updaterStartInfo.ArgumentList.Add("-NoProfile");
+            updaterStartInfo.ArgumentList.Add("-NonInteractive");
+            updaterStartInfo.ArgumentList.Add("-ExecutionPolicy");
+            updaterStartInfo.ArgumentList.Add("Bypass");
+            updaterStartInfo.ArgumentList.Add("-File");
+            updaterStartInfo.ArgumentList.Add(updaterScriptPath);
+            updaterStartInfo.ArgumentList.Add("-ProcessId");
+            updaterStartInfo.ArgumentList.Add(Environment.ProcessId.ToString());
+            updaterStartInfo.ArgumentList.Add("-InstallDirectory");
+            updaterStartInfo.ArgumentList.Add(Path.GetDirectoryName(currentExecutable)!);
+            updaterStartInfo.ArgumentList.Add("-PayloadDirectory");
+            updaterStartInfo.ArgumentList.Add(payloadRoot);
+            updaterStartInfo.ArgumentList.Add("-UpdateDirectory");
+            updaterStartInfo.ArgumentList.Add(updateDirectory);
+            updaterStartInfo.ArgumentList.Add("-ExecutableName");
+            updaterStartInfo.ArgumentList.Add(Path.GetFileName(currentExecutable));
+
+            if (Process.Start(updaterStartInfo) == null)
+            {
+                throw new InvalidOperationException("Не удалось запустить установщик обновления.");
+            }
+            updaterStarted = true;
+            try
+            {
+                File.Delete(updateFilePath);
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"Не удалось удалить скачанный архив обновления: {ex.Message}");
+            }
+
+            progress?.Report("Обновление подготовлено. Закройте приложение, чтобы установить его.");
+            return true;
         }
         catch (Exception ex)
         {
+            if (!updaterStarted && updateDirectory != null && Directory.Exists(updateDirectory))
+            {
+                try
+                {
+                    Directory.Delete(updateDirectory, true);
+                }
+                catch (Exception cleanupException)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Не удалось удалить временную папку обновления: {cleanupException.Message}");
+                }
+            }
+            if (!updaterStarted && updaterScriptPath != null && File.Exists(updaterScriptPath))
+            {
+                try
+                {
+                    File.Delete(updaterScriptPath);
+                }
+                catch (Exception cleanupException)
+                {
+                    System.Diagnostics.Debug.WriteLine($"Не удалось удалить временный установщик: {cleanupException.Message}");
+                }
+            }
             progress?.Report($"Ошибка установки: {ex.Message}");
             System.Diagnostics.Debug.WriteLine($"Ошибка установки обновления: {ex.Message}");
             return false;
         }
     }
+
+    private const string UiUpdateInstallerScript = """
+        param(
+            [Parameter(Mandatory = $true)][int]$ProcessId,
+            [Parameter(Mandatory = $true)][string]$InstallDirectory,
+            [Parameter(Mandatory = $true)][string]$PayloadDirectory,
+            [Parameter(Mandatory = $true)][string]$UpdateDirectory,
+            [Parameter(Mandatory = $true)][string]$ExecutableName
+        )
+
+        $ErrorActionPreference = 'Stop'
+        $logPath = Join-Path $UpdateDirectory 'updater.log'
+        $backupDirectory = Join-Path $UpdateDirectory 'backup'
+        $changedFiles = [System.Collections.Generic.List[string]]::new()
+        $updateSucceeded = $false
+
+        try {
+            while (Get-Process -Id $ProcessId -ErrorAction SilentlyContinue) {
+                Start-Sleep -Milliseconds 500
+            }
+
+            $files = Get-ChildItem -LiteralPath $PayloadDirectory -File -Recurse | Where-Object {
+                $relativePath = $_.FullName.Substring($PayloadDirectory.Length).TrimStart('\')
+                $segments = $relativePath -split '[\\/]'
+                $isZapretFolder = $segments[0].StartsWith('zapret-', [System.StringComparison]::OrdinalIgnoreCase)
+                $isUserFile = $segments.Length -eq 1 -and $segments[0] -in @('config.ini', 'game_filter.enabled', '.patched')
+                -not $isZapretFolder -and -not $isUserFile
+            }
+
+            if (-not ($files | Where-Object { $_.Name -ieq $ExecutableName })) {
+                throw "Пакет обновления не содержит $ExecutableName."
+            }
+
+            foreach ($file in $files) {
+                $relativePath = $file.FullName.Substring($PayloadDirectory.Length).TrimStart('\')
+                $destination = Join-Path $InstallDirectory $relativePath
+                $backup = Join-Path $backupDirectory $relativePath
+
+                $destinationParent = Split-Path -Parent $destination
+                if (-not (Test-Path -LiteralPath $destinationParent)) {
+                    New-Item -ItemType Directory -Path $destinationParent -Force | Out-Null
+                }
+                if (Test-Path -LiteralPath $destination) {
+                    $backupParent = Split-Path -Parent $backup
+                    if (-not (Test-Path -LiteralPath $backupParent)) {
+                        New-Item -ItemType Directory -Path $backupParent -Force | Out-Null
+                    }
+                    Copy-Item -LiteralPath $destination -Destination $backup -Force
+                }
+                $changedFiles.Add($relativePath)
+                Copy-Item -LiteralPath $file.FullName -Destination $destination -Force
+            }
+
+            $updatedExecutable = Join-Path $InstallDirectory $ExecutableName
+            $newProcess = Start-Process -FilePath $updatedExecutable -PassThru
+            Start-Sleep -Seconds 10
+            if ($newProcess.HasExited) {
+                throw "Обновлённое приложение завершилось при запуске."
+            }
+
+            $updateSucceeded = $true
+        }
+        catch {
+            Add-Content -LiteralPath $logPath -Value $_.Exception.ToString()
+            foreach ($relativePath in $changedFiles) {
+                try {
+                    $destination = Join-Path $InstallDirectory $relativePath
+                    $backup = Join-Path $backupDirectory $relativePath
+                    if (Test-Path -LiteralPath $backup) {
+                        Copy-Item -LiteralPath $backup -Destination $destination -Force
+                    }
+                    elseif (Test-Path -LiteralPath $destination) {
+                        Remove-Item -LiteralPath $destination -Force
+                    }
+                }
+                catch {
+                    Add-Content -LiteralPath $logPath -Value "Ошибка отката $relativePath : $($_.Exception.Message)"
+                }
+            }
+
+            try {
+                $oldExecutable = Join-Path $InstallDirectory $ExecutableName
+                if (Test-Path -LiteralPath $oldExecutable) {
+                    Start-Process -FilePath $oldExecutable
+                }
+                Add-Content -LiteralPath $logPath -Value 'Откат выполнен; приложение запущено с предыдущими файлами.'
+            }
+            catch {
+                Add-Content -LiteralPath $logPath -Value "Не удалось запустить предыдущую версию: $($_.Exception.Message)"
+            }
+        }
+
+        if ($updateSucceeded) {
+            Remove-Item -LiteralPath $UpdateDirectory -Recurse -Force -ErrorAction SilentlyContinue
+            Remove-Item -LiteralPath $PSCommandPath -Force -ErrorAction SilentlyContinue
+        }
+        """;
 
     /// <summary>
     /// Устанавливает обновление скриптов (вызывает ZapretDownloader)
@@ -296,7 +457,7 @@ public static class UpdateService
         {
             progress?.Report("Скачивание скриптов Zapret...");
 
-            bool success = await ZapretDownloader.DownloadAndExtractLatestAsync((status, percent) =>
+            var result = await ZapretDownloader.DownloadAndExtractLatestAsync((status, percent) =>
             {
                 if (percent.HasValue)
                 {
@@ -308,14 +469,18 @@ public static class UpdateService
                 }
             });
 
-            if (success)
+            if (result.Success)
             {
                 progress?.Report("Скрипты успешно обновлены!");
                 // Сбрасываем кэш путей
                 AppPaths.ResetCache();
             }
+            else
+            {
+                progress?.Report($"Ошибка при загрузке: {result.ErrorMessage}");
+            }
 
-            return success;
+            return result.Success;
         }
         catch (Exception ex)
         {

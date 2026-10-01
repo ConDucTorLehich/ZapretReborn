@@ -30,6 +30,7 @@ namespace ZapretReborn
             InitializeThemeSettings();
             InitializeAutostartSettings();
             InitializeVersionInfo();
+            SettingsUpdateBadge.Visibility = App.IsUpdateAvailable ? Visibility.Visible : Visibility.Collapsed;
 
             // Если есть доступные обновления, обновляем информацию о версиях
             if (App.IsUpdateAvailable)
@@ -149,8 +150,21 @@ namespace ZapretReborn
             {
                 if (ZapretVersionRun == null) return;
                 
-                string appDirectory = AppDomain.CurrentDomain.BaseDirectory;
-                string[] matchingDirectories = Directory.GetDirectories(appDirectory, "zapret-*");
+                string appDirectory = AppPaths.ApplicationDirectory;
+                
+                // Ищем папки с разными шаблонами
+                var patterns = new[] { "zapret-*", "zapret-discord-*" };
+                string[] matchingDirectories = Array.Empty<string>();
+                
+                foreach (var pattern in patterns)
+                {
+                    matchingDirectories = Directory.GetDirectories(appDirectory, pattern);
+                    if (matchingDirectories.Length > 0)
+                    {
+                        break;
+                    }
+                }
+                
                 if (matchingDirectories.Length == 0)
                 {
                     ZapretVersionRun.Text = "папка не найдена";
@@ -159,7 +173,7 @@ namespace ZapretReborn
 
                 _dynamicZapretFolderPath = matchingDirectories[0];
 
-                // Попытка прочитать из service.bat
+                // Попытка прочитать из service.bat (для совместимости)
                 string serviceFilePath = Path.Combine(_dynamicZapretFolderPath, "service.bat");
                 if (File.Exists(serviceFilePath))
                 {
@@ -182,7 +196,29 @@ namespace ZapretReborn
                     }
                 }
 
-                // Резерв: парсим имя папки
+                // Ищем версию в любом .bat файле
+                var batFiles = Directory.GetFiles(_dynamicZapretFolderPath, "*.bat", SearchOption.AllDirectories);
+                foreach (var batFile in batFiles)
+                {
+                    foreach (var line in File.ReadAllLines(batFile))
+                    {
+                        var t = line.Trim();
+                        if (t.StartsWith("set \"LOCAL_VERSION=") ||
+                            t.StartsWith("set LOCAL_VERSION=") ||
+                            t.StartsWith("LOCAL_VERSION="))
+                        {
+                            var parts = t.Split('=', 2);
+                            if (parts.Length == 2)
+                            {
+                                var version = parts[1].Trim().Trim('"', '\'', ' ');
+                                ZapretVersionRun.Text = $"v{version}";
+                                return;
+                            }
+                        }
+                    }
+                }
+
+                // Резерв: парсим имя папки (например, zapret-discord-youtube-1.10.3)
                 var folderName = Path.GetFileName(_dynamicZapretFolderPath) ?? string.Empty;
                 var m = Regex.Match(folderName, @"\d+\.\d+\.\d+[a-z]?", RegexOptions.IgnoreCase);
                 if (m.Success)
@@ -191,7 +227,8 @@ namespace ZapretReborn
                     return;
                 }
 
-                ZapretVersionRun.Text = "не определена";
+                // Последний резерв: используем константу
+                ZapretVersionRun.Text = $"v{AppConstants.CurrentScriptVersion}";
             }
             catch
             {
@@ -329,6 +366,8 @@ namespace ZapretReborn
             {
                 bool uiUpdated = false;
                 bool scriptUpdated = false;
+                string? installedUiVersion = null;
+                string? installedScriptVersion = null;
 
                 // 1. Проверяем и устанавливаем обновление UI
                 UpdateStatusText.Text = "Проверка обновлений UI...";
@@ -367,11 +406,10 @@ namespace ZapretReborn
                             if (installed)
                             {
                                 uiUpdated = true;
-                                UpdateStatusText.Text = "UI обновление установлено!";
+                                installedUiVersion = uiUpdateResult.LatestVersion;
+                                UpdateStatusText.Text = "UI-обновление подготовлено к установке после закрытия приложения";
                                 UpdateStatusText.Foreground = new SolidColorBrush(Colors.Green);
-
-                                // Обновляем отображение версии
-                                UiVersionRun.Text = $"v{UpdateResult.GetCurrentUiVersion()}";
+                                UiVersionRun.Text = $"v{uiUpdateResult.LatestVersion}";
                             }
                             else
                             {
@@ -417,6 +455,7 @@ namespace ZapretReborn
                     if (installed)
                     {
                         scriptUpdated = true;
+                        installedScriptVersion = scriptUpdateResult.LatestVersion;
                         UpdateStatusText.Text = "Скрипты успешно обновлены!";
                         UpdateStatusText.Foreground = new SolidColorBrush(Colors.Green);
 
@@ -437,14 +476,11 @@ namespace ZapretReborn
                 // Итоговый статус
                 if (uiUpdated || scriptUpdated)
                 {
-                    UpdateStatusText.Text = "Обновления установлены!";
+                    UpdateStatusText.Text = uiUpdated
+                        ? "UI-обновление подготовлено; закройте приложение для установки."
+                        : "Обновления установлены!";
                     UpdateStatusText.Foreground = new SolidColorBrush(Colors.Green);
 
-                    // Если было обновлено UI, предлагаем перезапуск
-                    if (uiUpdated)
-                    {
-                        await ShowRestartRequiredDialog();
-                    }
                 }
                 else if (!uiUpdated && !scriptUpdated)
                 {
@@ -455,8 +491,20 @@ namespace ZapretReborn
                 // Обновляем информацию о версиях
                 UpdateVersionsDisplay();
 
-                // Сбрасываем флаг обновлений в App
-                App.IsUpdateAvailable = false;
+                if (App.MainWindow is MainWindow mainWindow)
+                {
+                    mainWindow.SetUpdateAvailability(
+                        uiUpdateResult.HasUpdate && !uiUpdated,
+                        scriptUpdateResult.HasUpdate && !scriptUpdated,
+                        installedUiVersion,
+                        installedScriptVersion);
+                }
+                SettingsUpdateBadge.Visibility = App.IsUpdateAvailable ? Visibility.Visible : Visibility.Collapsed;
+
+                if (uiUpdated)
+                {
+                    await ShowRestartRequiredDialog();
+                }
 
             }
             catch (Exception ex)
@@ -477,9 +525,9 @@ namespace ZapretReborn
         {
             var dialog = new ContentDialog
             {
-                Title = "Обновление установлено",
-                Content = "Новая версия ZapretReborn успешно установлена.\n\nДля применения изменений необходимо перезапустить приложение.",
-                PrimaryButtonText = "Перезапустить сейчас",
+                Title = "Обновление подготовлено",
+                Content = "Single-file обновление скачано. Чтобы применить его, закройте приложение. Установщик заменит EXE и запустит новую версию.",
+                PrimaryButtonText = "Закрыть и обновить",
                 CloseButtonText = "Позже",
                 DefaultButton = ContentDialogButton.Primary,
                 XamlRoot = this.XamlRoot
@@ -497,8 +545,6 @@ namespace ZapretReborn
         {
             try
             {
-                string exePath = Process.GetCurrentProcess().MainModule.FileName;
-                Process.Start(exePath);
                 App.MainWindow.Close();
             }
             catch (Exception ex)

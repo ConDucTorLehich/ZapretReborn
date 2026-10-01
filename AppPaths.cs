@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 
 namespace ZapretReborn
 {
@@ -9,6 +10,9 @@ namespace ZapretReborn
     public static class AppPaths
     {
         private static string? _zapretFolder;
+
+        public static string ApplicationDirectory =>
+            Path.GetDirectoryName(Environment.ProcessPath) ?? AppContext.BaseDirectory;
 
         /// <summary>
         /// Возвращает путь к папке с Zapret скриптами
@@ -21,19 +25,33 @@ namespace ZapretReborn
                 if (_zapretFolder != null && Directory.Exists(_zapretFolder))
                     return _zapretFolder;
 
-                string baseDir = AppContext.BaseDirectory;
-
-                // Ищем любую папку, начинающуюся на zapret- в директории приложения
-                var matchingDirs = Directory.GetDirectories(baseDir, "zapret-*");
-                if (matchingDirs.Length > 0)
+                foreach (string searchDirectory in GetZapretSearchDirectories())
                 {
-                    _zapretFolder = matchingDirs[0];
-                    return _zapretFolder;
+                    foreach (var pattern in new[] { "zapret-*", "zapret-discord-*" })
+                    {
+                        var matchingDirs = Directory.GetDirectories(searchDirectory, pattern);
+                        if (matchingDirs.Length > 0)
+                        {
+                            _zapretFolder = matchingDirs[0];
+                            return _zapretFolder;
+                        }
+                    }
                 }
 
-                // Papka ne naidena
                 return null;
             }
+        }
+
+        private static string[] GetZapretSearchDirectories()
+        {
+            return new[]
+            {
+                ApplicationDirectory,
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "ZapretReborn")
+            }
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Where(Directory.Exists)
+            .ToArray();
         }
 
         /// <summary>
@@ -45,22 +63,38 @@ namespace ZapretReborn
         }
 
         /// <summary>
-        /// Получает текущую версию скриптов из service.bat или имени папки
+        /// Получает текущую версию скриптов из service.bat, любого .bat файла или имени папки
         /// </summary>
         public static string GetCurrentScriptVersion()
         {
             try
             {
-                string appDirectory = AppContext.BaseDirectory;
-                var matchingDirectories = Directory.GetDirectories(appDirectory, "zapret-*");
-                if (matchingDirectories.Length == 0)
+                string? zapretFolder = null;
+                
+                foreach (string searchDirectory in GetZapretSearchDirectories())
+                {
+                    foreach (var pattern in new[] { "zapret-*", "zapret-discord-*" })
+                    {
+                        var matchingDirectories = Directory.GetDirectories(searchDirectory, pattern);
+                        if (matchingDirectories.Length > 0)
+                        {
+                            zapretFolder = matchingDirectories[0];
+                            break;
+                        }
+                    }
+
+                    if (zapretFolder != null)
+                    {
+                        break;
+                    }
+                }
+                
+                if (zapretFolder == null)
                 {
                     return AppConstants.CurrentScriptVersion;
                 }
 
-                string zapretFolder = matchingDirectories[0];
-
-                // Пытаемся прочитать из service.bat
+                // Пытаемся прочитать из service.bat (для совместимости)
                 string serviceFilePath = Path.Combine(zapretFolder, "service.bat");
                 if (File.Exists(serviceFilePath))
                 {
@@ -81,7 +115,27 @@ namespace ZapretReborn
                     }
                 }
 
-                // Резерв: парсим имя папки
+                // Пробуем найти версию в любом .bat файле
+                var batFiles = Directory.GetFiles(zapretFolder, "*.bat", SearchOption.AllDirectories);
+                foreach (var batFile in batFiles)
+                {
+                    foreach (var line in File.ReadAllLines(batFile))
+                    {
+                        var trimmedLine = line.Trim();
+                        if (trimmedLine.StartsWith("set \"LOCAL_VERSION=") ||
+                            trimmedLine.StartsWith("set LOCAL_VERSION=") ||
+                            trimmedLine.StartsWith("LOCAL_VERSION="))
+                        {
+                            var parts = trimmedLine.Split('=', 2);
+                            if (parts.Length == 2)
+                            {
+                                return parts[1].Trim().Trim('"', '\'', ' ');
+                            }
+                        }
+                    }
+                }
+
+                // Резерв: парсим имя папки (например, zapret-discord-youtube-1.10.3)
                 var folderName = Path.GetFileName(zapretFolder) ?? string.Empty;
                 var match = System.Text.RegularExpressions.Regex.Match(folderName, @"\d+\.\d+\.\d+[a-z]?", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
                 if (match.Success)

@@ -31,22 +31,22 @@
                FontSize="13" 
                FontWeight="Medium" 
                CharacterSpacing="120" 
-               Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+               Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}"/>
 
                     <TextBlock Text="by ConDucTor" 
                FontFamily="Segoe UI Variable Text"
                FontSize="11" 
                FontWeight="Medium" 
                CharacterSpacing="50"
-               Foreground="{ThemeResource TextFillColorTertiaryBrush}"
+               Foreground="{ThemeResource SystemControlForegroundBaseLowBrush}"
                Margin="0,0,0,0"/>
                 </StackPanel>
             </StackPanel>
 
             <Border x:Name="MainControlCard" 
                     Opacity="0"
-                    Background="{ThemeResource LayerFillColorDefaultBrush}" 
-                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" 
+                    Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" 
+                    BorderBrush="{ThemeResource SystemBaseLowColor}" 
                     BorderThickness="1" 
                     CornerRadius="8" 
                     Width="264">
@@ -64,7 +64,7 @@
                     <Grid x:Name="TopControlPanel" 
                           Grid.Row="0"
                           Canvas.ZIndex="2" 
-                          Background="{ThemeResource LayerFillColorDefaultBrush}"
+                          Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"
                           Padding="15,10,15,12">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
@@ -124,12 +124,12 @@
                 <TextBlock Text="Проверка доступности ресурсов" 
                            FontSize="12"
                            FontWeight="SemiBold" 
-                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" 
+                           Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}" 
                            Margin="2,0,0,0"/>
 
                 <Grid Height="80" 
-                      Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" 
-                      BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" 
+                      Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" 
+                      BorderBrush="{ThemeResource SystemBaseLowColor}" 
                       BorderThickness="1" 
                       CornerRadius="10" 
                       Padding="5,0">
@@ -157,8 +157,8 @@
                 </Grid>
 
                 <Grid Height="80"
-                      Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" 
-                      BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" 
+                      Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" 
+                      BorderBrush="{ThemeResource SystemBaseLowColor}" 
                       BorderThickness="1" 
                       CornerRadius="10" 
                       Padding="5,0">

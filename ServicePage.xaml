@@ -13,15 +13,15 @@
 
                 <StackPanel Spacing="1" Margin="4,0,0,4">
                     <TextBlock Text="Сервисы и Фильтры" FontSize="20" FontWeight="Bold" Foreground="{ThemeResource TextFillColorPrimaryBrush}"/>
-                    <TextBlock Text="Дополнительные настройки Zapret" FontSize="12" FontWeight="Medium" Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+                    <TextBlock Text="Дополнительные настройки Zapret" FontSize="12" FontWeight="Medium" Foreground="{ThemeResource SystemControlForegroundBaseLowBrush}"/>
                 </StackPanel>
 
-                <Border Background="{ThemeResource LayerFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" Padding="10">
+                <Border Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" BorderBrush="{ThemeResource SystemBaseLowColor}" BorderThickness="1" CornerRadius="8" Padding="10">
                     <StackPanel Spacing="6" >
                         <TextBlock Text="Настройка фильтрации" FontWeight="SemiBold" FontSize="14"/>
 
                         <StackPanel Spacing="5">
-                            <TextBlock Text="Игровой фильтр (Game Filter):" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                            <TextBlock Text="Игровой фильтр (Game Filter):" FontSize="12" Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}"/>
                             <InfoBadge x:Name="RebootInfoBadge" Visibility="Collapsed"  Background="#CC1616" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-20,0,0" ToolTipService.ToolTip="Необходим перезапуск скриптов!">
                                 <InfoBadge.IconSource>
                                     <FontIconSource FontFamily="{StaticResource SymbolThemeFontFamily}" Glyph="&#xF13C;" />
@@ -39,14 +39,14 @@
                         <Grid Margin="0,5,0,0">
                             <StackPanel VerticalAlignment="Center" Spacing="2">
                                 <TextBlock Text="IPSet Фильтр" FontWeight="Medium" FontSize="13"/>
-                                <TextBlock x:Name="IPSetStatusText" Text="Режим: загружен" FontSize="11" Foreground="{ThemeResource TextFillColorTertiaryBrush}"/>
+                                <TextBlock x:Name="IPSetStatusText" Text="Режим: загружен" FontSize="11" Foreground="{ThemeResource SystemControlForegroundBaseLowBrush}"/>
                             </StackPanel>
                             <Button Content="Сменить" HorizontalAlignment="Right" Click="IPSetSwitch_Click"/>
                         </Grid>
                     </StackPanel>
                 </Border>
 
-                <Border Background="{ThemeResource LayerFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" Padding="15">
+                <Border Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" BorderBrush="{ThemeResource SystemBaseLowColor}" BorderThickness="1" CornerRadius="8" Padding="15">
                     <StackPanel Spacing="10">
                         <TextBlock Text="Обновление баз данных" FontWeight="SemiBold" FontSize="14"/>
 
@@ -70,7 +70,7 @@
                     </StackPanel>
                 </Border>
 
-                <Border Background="{ThemeResource LayerFillColorDefaultBrush}" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}" BorderThickness="1" CornerRadius="8" Padding="15">
+                <Border Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}" BorderBrush="{ThemeResource SystemBaseLowColor}" BorderThickness="1" CornerRadius="8" Padding="15">
                     <StackPanel Spacing="12">
                         <TextBlock Text="Обслуживание системы" FontWeight="SemiBold" FontSize="14"/>
 
@@ -94,10 +94,10 @@
 
                 <StackPanel x:Name="DiagnosticsLoadingBlock" Orientation="Horizontal" Spacing="8" Margin="0,0,0,5">
                     <ProgressRing IsActive="True" Width="16" Height="16"/>
-                    <TextBlock Text="Выполняется анализ системы..." VerticalAlignment="Center" FontSize="12" Foreground="{ThemeResource TextFillColorSecondaryBrush}"/>
+                    <TextBlock Text="Выполняется анализ системы..." VerticalAlignment="Center" FontSize="12" Foreground="{ThemeResource SystemControlForegroundBaseMediumBrush}"/>
                 </StackPanel>
 
-                <ScrollViewer Height="320" Width="301" VerticalScrollBarVisibility="Auto" Background="{ThemeResource LayerOnAcrylicFillColorDefaultBrush}"  Padding="6,4" Margin="0,0,0,0" CornerRadius="8" BorderThickness="1" BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
+                <ScrollViewer Height="320" Width="301" VerticalScrollBarVisibility="Auto" Background="{ThemeResource CardBackgroundFillColorSecondaryBrush}"  Padding="6,4" Margin="0,0,0,0" CornerRadius="8" BorderThickness="1" BorderBrush="{ThemeResource SystemBaseLowColor}">
                     <RichTextBlock x:Name="DiagnosticsRichLog" 
                                FontSize="11" 
                                FontFamily="Consolas" 

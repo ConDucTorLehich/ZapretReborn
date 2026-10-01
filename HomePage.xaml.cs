@@ -60,7 +60,7 @@ namespace ZapretReborn
         private string _scriptsFolder = AppPaths.ZapretFolder;
         private bool _isScriptsLoaded = false;
         private bool _hasCheckedStatus = false;
-        private readonly string _settingsFilePath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, AppConstants.ConfigFileName);
+        private readonly string _settingsFilePath = Path.Combine(AppPaths.ApplicationDirectory, AppConstants.ConfigFileName);
 
         private static readonly HttpClient _httpClient = new HttpClient(new HttpClientHandler
         {
@@ -84,12 +84,6 @@ namespace ZapretReborn
 
         private async void HomePage_Loaded(object sender, RoutedEventArgs e)
         {
-            if (App.MainWindow is Window mainWindow)
-            {
-                mainWindow.Closed -= MainWindow_Closed;
-                mainWindow.Closed += MainWindow_Closed;
-            }
-
             // Проверяем, запущена ли служба прямо сейчас
             bool isAlreadyRunning = Process.GetProcessesByName("winws").Length > 0;
 
@@ -117,17 +111,6 @@ namespace ZapretReborn
             }
 
             CheckExistingProcess();
-        }
-
-        private async void MainWindow_Closed(object sender, WindowEventArgs args)
-        {
-            if (ConnectionSwitch.IsOn || Process.GetProcessesByName("winws").Length > 0)
-            {
-                args.Handled = true;
-                StatusText.Text = "Очистка системы...";
-                await StopScript();
-                App.MainWindow.Close();
-            }
         }
 
         private void LoadScripts()
@@ -380,29 +363,10 @@ namespace ZapretReborn
 
             try
             {
-                await Task.Run(() =>
+                if (!await StopRunningScriptsAsync(_scriptProcess))
                 {
-                    Process[] processes = Process.GetProcessesByName("winws");
-                    foreach (Process process in processes)
-                    {
-                        try { process.Kill(entireProcessTree: true); } catch { }
-                    }
-
-                    if (_scriptProcess != null && !_scriptProcess.HasExited)
-                    {
-                        try { _scriptProcess.Kill(entireProcessTree: true); } catch { }
-                    }
-                });
-
-                await Task.Delay(AppConstants.CleanupDelay);
-
-                await Task.Run(() =>
-                {
-                    RunSystemCommand("net stop WinDivert");
-                    RunSystemCommand("sc delete WinDivert");
-                    RunSystemCommand("net stop WinDivert14");
-                    RunSystemCommand("sc delete WinDivert14");
-                });
+                    throw new InvalidOperationException("Не удалось остановить процесс winws.");
+                }
 
                 StatusText.Text = "Отключено";
                 StatusText.Foreground = new SolidColorBrush(Colors.Gray);
@@ -418,7 +382,86 @@ namespace ZapretReborn
             }
         }
 
-        private void RunSystemCommand(string command)
+        public static async Task<bool> StopRunningScriptsAsync(Process? scriptProcess = null)
+        {
+            await Task.Run(() =>
+            {
+                if (scriptProcess != null)
+                {
+                    try
+                    {
+                        if (!scriptProcess.HasExited)
+                        {
+                            scriptProcess.Kill(entireProcessTree: true);
+                            scriptProcess.WaitForExit(3000);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Debug.WriteLine($"Не удалось остановить управляющий процесс скрипта: {ex.Message}");
+                    }
+                }
+
+                foreach (Process process in Process.GetProcessesByName("winws"))
+                {
+                    using (process)
+                    {
+                        try
+                        {
+                            process.Kill(entireProcessTree: true);
+                            process.WaitForExit(3000);
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.WriteLine($"Не удалось остановить winws без повышения прав: {ex.Message}");
+                        }
+                    }
+                }
+            });
+
+            if (Process.GetProcessesByName("winws").Length > 0)
+            {
+                try
+                {
+                    using Process? taskkill = Process.Start(new ProcessStartInfo
+                    {
+                        FileName = "taskkill.exe",
+                        Arguments = "/F /T /IM winws.exe",
+                        UseShellExecute = true,
+                        Verb = "runas",
+                        WindowStyle = ProcessWindowStyle.Hidden
+                    });
+                    if (taskkill == null)
+                    {
+                        return false;
+                    }
+
+                    await taskkill.WaitForExitAsync();
+                    if (taskkill.ExitCode != 0)
+                    {
+                        Debug.WriteLine($"taskkill завершился с кодом {taskkill.ExitCode}.");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.WriteLine($"Не удалось завершить winws с повышенными правами: {ex.Message}");
+                    return false;
+                }
+            }
+
+            await Task.Delay(AppConstants.CleanupDelay);
+            await Task.Run(() =>
+            {
+                RunSystemCommand("net stop WinDivert");
+                RunSystemCommand("sc delete WinDivert");
+                RunSystemCommand("net stop WinDivert14");
+                RunSystemCommand("sc delete WinDivert14");
+            });
+
+            return Process.GetProcessesByName("winws").Length == 0;
+        }
+
+        private static void RunSystemCommand(string command)
         {
             try
             {

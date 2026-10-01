@@ -150,7 +150,7 @@ namespace ZapretReborn
 
             var popupContent = new StackPanel { Spacing = 4, Padding = new Thickness(4, -10, 4, 2) };
             var titleBlock = new TextBlock { FontWeight = Microsoft.UI.Text.FontWeights.SemiBold, FontSize = 14 };
-            var subtitleBlock = new TextBlock { TextWrapping = TextWrapping.Wrap, FontSize = 12, Foreground = (SolidColorBrush)Application.Current.Resources["TextFillColorSecondaryBrush"] };
+            var subtitleBlock = new TextBlock { TextWrapping = TextWrapping.Wrap, FontSize = 12, Foreground = (SolidColorBrush)Application.Current.Resources["SystemControlForegroundBaseMediumBrush"] };
 
             popupContent.Children.Add(titleBlock);
             popupContent.Children.Add(subtitleBlock);

@@ -3,6 +3,7 @@ using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using System;
+using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
 
@@ -14,6 +15,10 @@ namespace ZapretReborn
         private bool _isCheckingUpdates = false;
         private bool _isUiUpdateAvailable = false;
         private bool _isScriptUpdateAvailable = false;
+        private string? _installedUiVersionThisSession;
+        private string? _installedScriptVersionThisSession;
+        private bool _isStoppingScriptsForClose;
+        private bool _allowClose;
 
         public MainWindow()
         {
@@ -22,6 +27,7 @@ namespace ZapretReborn
             if (this.Content is FrameworkElement rootElement)
             {
                 rootElement.Loaded += RootElement_Loaded;
+                rootElement.ActualThemeChanged += RootElement_ActualThemeChanged;
             }
             AppWindow.Title = "ZapretReborn";
             AppWindow.Resize(new Windows.Graphics.SizeInt32(340, 575));
@@ -34,6 +40,7 @@ namespace ZapretReborn
             presenter.IsResizable = true;
             presenter.SetBorderAndTitleBar(true, true);
             AppWindow.SetPresenter(presenter);
+            AppWindow.Closing += AppWindow_Closing;
 
             nvZapret.SelectedItem = Home;
 
@@ -45,6 +52,58 @@ namespace ZapretReborn
 
             // 2. Настраиваем таймер на повторение
             StartUpdateTimer();
+        }
+
+        private async void AppWindow_Closing(
+            AppWindow sender,
+            Microsoft.UI.Windowing.AppWindowClosingEventArgs args)
+        {
+            if (_allowClose || Process.GetProcessesByName("winws").Length == 0)
+            {
+                return;
+            }
+
+            args.Cancel = true;
+            if (_isStoppingScriptsForClose)
+            {
+                return;
+            }
+
+            _isStoppingScriptsForClose = true;
+            try
+            {
+                bool stopped = await HomePage.StopRunningScriptsAsync();
+                if (stopped)
+                {
+                    _allowClose = true;
+                    _updateTimer.Stop();
+                    Close();
+                    return;
+                }
+
+                var dialog = new ContentDialog
+                {
+                    Title = "Не удалось остановить Zapret",
+                    Content = "Процесс winws всё ещё работает. Подтвердите запрос контроля учетных записей Windows, чтобы остановить его, затем нажмите «Повторить».",
+                    PrimaryButtonText = "Повторить",
+                    CloseButtonText = "Остаться в приложении",
+                    DefaultButton = ContentDialogButton.Primary,
+                    XamlRoot = ((FrameworkElement)Content).XamlRoot
+                };
+
+                if (await dialog.ShowAsync() == ContentDialogResult.Primary)
+                {
+                    Close();
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Ошибка остановки скрипта при закрытии: {ex.Message}");
+            }
+            finally
+            {
+                _isStoppingScriptsForClose = false;
+            }
         }
 
         private async void RootElement_Loaded(object sender, RoutedEventArgs e)
@@ -66,6 +125,11 @@ namespace ZapretReborn
             _updateTimer.Start();
         }
 
+        private void RootElement_ActualThemeChanged(FrameworkElement sender, object args)
+        {
+            UpdateTitleBarButtonsColor();
+        }
+
         private async Task CheckAllUpdatesAsync()
         {
             if (_isCheckingUpdates) return;
@@ -81,7 +145,8 @@ namespace ZapretReborn
                 try
                 {
                     var uiUpdateResult = await UpdateService.CheckUiUpdatesAsync();
-                    _isUiUpdateAvailable = uiUpdateResult.HasUpdate;
+                    _isUiUpdateAvailable = uiUpdateResult.HasUpdate &&
+                        !string.Equals(uiUpdateResult.LatestVersion, _installedUiVersionThisSession, StringComparison.OrdinalIgnoreCase);
                 }
                 catch (Exception ex)
                 {
@@ -92,39 +157,61 @@ namespace ZapretReborn
                 try
                 {
                     var scriptUpdateResult = await UpdateService.CheckScriptUpdatesAsync();
-                    _isScriptUpdateAvailable = scriptUpdateResult.HasUpdate;
+                    _isScriptUpdateAvailable = scriptUpdateResult.HasUpdate &&
+                        !string.Equals(scriptUpdateResult.LatestVersion, _installedScriptVersionThisSession, StringComparison.OrdinalIgnoreCase);
                 }
                 catch (Exception ex)
                 {
                     System.Diagnostics.Debug.WriteLine($"Ошибка проверки обновлений скриптов: {ex.Message}");
                 }
 
-                // Обновляем UI
-                if (_isUiUpdateAvailable || _isScriptUpdateAvailable)
-                {
-                    UpdateBadge.Visibility = Visibility.Visible;
-                    App.IsUpdateAvailable = true;
-
-                    string tooltipText;
-                    if (_isUiUpdateAvailable && _isScriptUpdateAvailable)
-                        tooltipText = " Доступны обновления приложения и скриптов!";
-                    else if (_isUiUpdateAvailable)
-                        tooltipText = " Доступно обновление приложения!";
-                    else
-                        tooltipText = " Доступно обновление скриптов zapret!";
-
-                    ToolTipService.SetToolTip(Settings, tooltipText);
-                }
-                else
-                {
-                    UpdateBadge.Visibility = Visibility.Collapsed;
-                    App.IsUpdateAvailable = false;
-                }
+                UpdateUpdateBadge();
             }
             finally
             {
                 _isCheckingUpdates = false;
             }
+        }
+
+        public void SetUpdateAvailability(
+            bool uiUpdateAvailable,
+            bool scriptUpdateAvailable,
+            string? installedUiVersion,
+            string? installedScriptVersion)
+        {
+            if (!string.IsNullOrWhiteSpace(installedUiVersion))
+            {
+                _installedUiVersionThisSession = installedUiVersion;
+            }
+
+            if (!string.IsNullOrWhiteSpace(installedScriptVersion))
+            {
+                _installedScriptVersionThisSession = installedScriptVersion;
+            }
+
+            _isUiUpdateAvailable = uiUpdateAvailable;
+            _isScriptUpdateAvailable = scriptUpdateAvailable;
+            UpdateUpdateBadge();
+        }
+
+        private void UpdateUpdateBadge()
+        {
+            bool hasAvailableUpdates = _isUiUpdateAvailable || _isScriptUpdateAvailable;
+            UpdateBadge.Visibility = hasAvailableUpdates ? Visibility.Visible : Visibility.Collapsed;
+            App.IsUpdateAvailable = hasAvailableUpdates;
+
+            if (!hasAvailableUpdates)
+            {
+                ToolTipService.SetToolTip(Settings, "Настройки");
+                return;
+            }
+
+            string tooltipText = _isUiUpdateAvailable && _isScriptUpdateAvailable
+                ? "Доступны обновления приложения и скриптов!"
+                : _isUiUpdateAvailable
+                    ? "Доступно обновление приложения!"
+                    : "Доступно обновление скриптов zapret!";
+            ToolTipService.SetToolTip(Settings, tooltipText);
         }
 
         private void CustomizeTitleBar()
@@ -148,23 +235,22 @@ namespace ZapretReborn
                 if (rootElement != null)
                 {
                     bool isDark = rootElement.ActualTheme == ElementTheme.Dark;
-                    var buttonColor = isDark ? Colors.White : Colors.Black;
-                    var hoverColor = isDark ? Windows.UI.Color.FromArgb(30, 255, 255, 255) : Windows.UI.Color.FromArgb(30, 0, 0, 0);
-
-                    titleBar.ButtonForegroundColor = buttonColor;
-                    titleBar.ButtonHoverBackgroundColor = hoverColor;
-                    titleBar.ButtonHoverForegroundColor = buttonColor;
-                    titleBar.ButtonPressedBackgroundColor = isDark ? Windows.UI.Color.FromArgb(80, 255, 255, 255) : Windows.UI.Color.FromArgb(80, 0, 0, 0);
-                    titleBar.ButtonInactiveForegroundColor = isDark ? Colors.Gray : Colors.DarkGray;
                     
-                    // Убедимся, что кнопки видны на светлом фоне - используем темно-серый для активного состояния
-                    // и черный для наведения, чтобы было видно на любом фоне
-                    if (!isDark)
-                    {
-                        titleBar.ButtonForegroundColor = Colors.Black;
-                        titleBar.ButtonHoverForegroundColor = Colors.Black;
-                        titleBar.ButtonInactiveForegroundColor = Windows.UI.Color.FromArgb(150, 0, 0, 0);
-                    }
+                    // Для светлой темы используем темные кнопки, для темной - светлые
+                    // Это гарантирует, что кнопки всегда видны
+                    titleBar.ButtonForegroundColor = isDark ? Colors.White : Colors.Black;
+                    titleBar.ButtonHoverForegroundColor = isDark ? Colors.White : Colors.Black;
+                    titleBar.ButtonInactiveForegroundColor = isDark ? 
+                        Windows.UI.Color.FromArgb(150, 255, 255, 255) : 
+                        Windows.UI.Color.FromArgb(150, 0, 0, 0);
+                    
+                    // Фон кнопок при наведении и нажатии
+                    titleBar.ButtonHoverBackgroundColor = isDark ? 
+                        Windows.UI.Color.FromArgb(30, 255, 255, 255) : 
+                        Windows.UI.Color.FromArgb(30, 0, 0, 0);
+                    titleBar.ButtonPressedBackgroundColor = isDark ? 
+                        Windows.UI.Color.FromArgb(80, 255, 255, 255) : 
+                        Windows.UI.Color.FromArgb(80, 0, 0, 0);
                 }
             }
         }
@@ -173,7 +259,7 @@ namespace ZapretReborn
         {
             try
             {
-                string iconPath = Path.Combine(AppContext.BaseDirectory, "appicon.ico");
+                string iconPath = Path.Combine(AppPaths.ApplicationDirectory, "appicon.ico");
                 if (File.Exists(iconPath))
                 {
                     this.AppWindow.SetIcon(iconPath);
@@ -247,7 +333,7 @@ namespace ZapretReborn
             {
                 Text = "Инициализация...",
                 FontSize = 13,
-                Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorSecondaryBrush"],
+                Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["SystemControlForegroundBaseMediumBrush"],
                 Margin = new Thickness(0, 0, 0, 8)
             };
 
@@ -265,7 +351,7 @@ namespace ZapretReborn
                 Text = "",
                 FontSize = 12,
                 HorizontalAlignment = HorizontalAlignment.Right,
-                Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["TextFillColorTertiaryBrush"],
+                Foreground = (Microsoft.UI.Xaml.Media.Brush)Application.Current.Resources["SystemControlForegroundBaseLowBrush"],
                 Margin = new Thickness(0, 4, 0, 0)
             };
 
@@ -289,7 +375,7 @@ namespace ZapretReborn
 
             _ = progressDialog.ShowAsync();
 
-            bool success = await ZapretDownloader.DownloadAndExtractLatestAsync((status, percent) =>
+            var result = await ZapretDownloader.DownloadAndExtractLatestAsync((status, percent) =>
             {
                 DispatcherQueue.TryEnqueue(() =>
                 {
@@ -313,19 +399,19 @@ namespace ZapretReborn
 
             var resultDialog = new ContentDialog
             {
-                Title = success ? "Загрузка завершена" : "Ошибка загрузки",
-                Content = success
+                Title = result.Success ? "Загрузка завершена" : "Ошибка загрузки",
+                Content = result.Success
                     ? "Все компоненты успешно установлены! Теперь вы можете выбрать и запустить нужный скрипт."
-                    : "Не удалось автоматическая загрузка. Открыть страницу релизов в браузере?",
-                PrimaryButtonText = success ? "Отлично" : "Открыть сайт",
-                CloseButtonText = success ? null : "Отмена",
+                    : $"Не удалось загрузить скрипты.\n\nПричина:\n{result.ErrorMessage}\n\nОтправьте скриншот этого сообщения разработчикам, если ошибка повторяется.",
+                PrimaryButtonText = result.Success ? "Отлично" : "Открыть сайт",
+                CloseButtonText = result.Success ? null : "Отмена",
                 DefaultButton = ContentDialogButton.Primary,
                 XamlRoot = this.Content.XamlRoot
             };
 
             var res = await resultDialog.ShowAsync();
 
-            if (success)
+            if (result.Success)
             {
                 if (contentFrame.Content is HomePage homePage)
                 {

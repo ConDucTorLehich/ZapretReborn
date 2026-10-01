@@ -9,7 +9,7 @@ namespace ZapretReborn
     {
         // Версии приложения
         public const string CurrentUiVersion = "2.0.0";
-        public const string CurrentScriptVersion = "2.0.0";
+        public const string CurrentScriptVersion = "";
 
         // URL для проверки обновлений скриптов (Flowseal)
         public const string ScriptVersionUrl = "https://raw.githubusercontent.com/Flowseal/zapret-discord-youtube/refs/heads/main/.service/version.txt";
