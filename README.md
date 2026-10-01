@@ -26,7 +26,7 @@
 
 Здесь можно выбрать тему, настроить запуск приложения при входе в Windows и проверить обновления приложения и скриптов. Обновление UI заменяет текущий EXE после закрытия программы, затем запускает новую версию.
 
-## Сборка
+## Сборка самостоятельно
 
 Из корня репозитория выполните:
 
@@ -38,8 +38,6 @@ dotnet publish .\ZapretReborn\ZapretReborn.csproj `
   -p:PublishProfile=.\ZapretReborn\Properties\PublishProfiles\win-x64.pubxml `
   -p:PublishTrimmed=false
 ```
-
-Для GitHub Release опубликуйте полученный файл с точным именем `ZapretReborn.exe`. Перед выпуском проверяйте запуск EXE и автообновление на чистой Windows-системе.
 
 ## Поддержка
 
