@@ -30,8 +30,6 @@ namespace ZapretReborn
                 rootElement.ActualThemeChanged += RootElement_ActualThemeChanged;
             }
             AppWindow.Title = "ZapretReborn";
-            AppWindow.Resize(new Windows.Graphics.SizeInt32(340, 575));
-            AppWindow.Move(new Windows.Graphics.PointInt32(1580, 505));
 
             var presenter = OverlappedPresenter.Create();
             presenter.IsAlwaysOnTop = false;
@@ -40,6 +38,7 @@ namespace ZapretReborn
             presenter.IsResizable = true;
             presenter.SetBorderAndTitleBar(true, true);
             AppWindow.SetPresenter(presenter);
+            PositionWindowBottomRight();
             AppWindow.Closing += AppWindow_Closing;
 
             nvZapret.SelectedItem = Home;
@@ -52,6 +51,20 @@ namespace ZapretReborn
 
             // 2. Настраиваем таймер на повторение
             StartUpdateTimer();
+        }
+
+        private void PositionWindowBottomRight()
+        {
+            var workArea = DisplayArea
+                .GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Primary)
+                .WorkArea;
+            int width = Math.Min(340, workArea.Width);
+            int height = Math.Min(575, workArea.Height);
+
+            AppWindow.Resize(new Windows.Graphics.SizeInt32(width, height));
+            AppWindow.Move(new Windows.Graphics.PointInt32(
+                workArea.X + Math.Max(0, workArea.Width - width - 8),
+                workArea.Y + Math.Max(0, workArea.Height - height)));
         }
 
         private async void AppWindow_Closing(
